@@ -10,12 +10,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4 # Updated to v4 to fix the Node warning
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.2' # Make sure this matches your Hostinger PHP version!
+          php-version: '8.4' # Updated to PHP 8.4 to match your composer.lock!
 
       - name: Install Composer Dependencies
         run: composer install --no-dev --optimize-autoloader
@@ -27,4 +27,4 @@ jobs:
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
           local-dir: ./
-          server-dir: /public_html/router/api/ # Change this if your API goes somewhere else!
+          server-dir: /public_html/api/
