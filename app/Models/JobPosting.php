@@ -15,6 +15,11 @@ class JobPosting extends Model
         'user_id',
         'job_title',
         'description',
-        'salary_range'
+        'salary_range',
+        'details'
+    ];
+
+    protected $casts = [
+        'details' => 'array',
     ];
 }

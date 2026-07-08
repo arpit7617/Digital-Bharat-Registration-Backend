@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Hash;
 
 class RegistrationController extends Controller
 {
+    use RegisterReferralWalletCredit;
     public function register(Request $request)
     {
         // 1. Core Validation
@@ -34,6 +35,13 @@ class RegistrationController extends Controller
 
             // 4. Automated Save
             $user = Registration::create($data);
+
+            // 5. Credit partner referral wallet if referee registered using referred_partner_code
+            try {
+                $this->creditPartnerReferralWallet($request, $user);
+            } catch (\Exception $ex) {
+                \Illuminate\Support\Facades\Log::error("Failed to credit partner referral wallet: " . $ex->getMessage());
+            }
 
             return response()->json([
                 'status' => 'success',
@@ -68,5 +76,34 @@ class RegistrationController extends Controller
             'status' => 'error',
             'message' => 'Invalid credentials'
         ], 401);
+    }
+
+    public function getAllRegistrations()
+    {
+        try {
+            $registrations = Registration::orderBy('created_at', 'desc')->get();
+            return response()->json($registrations, 200);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    public function updateProfile(Request $request, $id)
+    {
+        try {
+            $user = Registration::findOrFail($id);
+            $user->update($request->all());
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Profile updated successfully',
+                'user' => $user
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => $e->getMessage()
+            ], 500);
+        }
     }
 }

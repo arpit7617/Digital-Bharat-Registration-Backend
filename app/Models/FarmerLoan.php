@@ -16,6 +16,11 @@ class FarmerLoan extends Model
         'land_size',
         'khasra_number',
         'amount',
-        'status'
+        'status',
+        'details'
+    ];
+
+    protected $casts = [
+        'details' => 'array',
     ];
 }

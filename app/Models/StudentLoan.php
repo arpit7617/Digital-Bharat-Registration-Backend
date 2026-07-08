@@ -16,6 +16,11 @@ class StudentLoan extends Model
         'college_name',
         'course_name',
         'amount',
-        'status'
+        'status',
+        'details'
+    ];
+
+    protected $casts = [
+        'details' => 'array',
     ];
 }

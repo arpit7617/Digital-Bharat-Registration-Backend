@@ -5,17 +5,18 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class CropRegistration extends Model
+class BusinessLoan extends Model
 {
     use HasFactory;
 
-    protected $table = 'crop_registrations';
+    protected $table = 'business_loans';
 
     protected $fillable = [
         'user_id',
-        'crop_name',
-        'price',
-        'image_base64',
+        'amount',
+        'purpose',
+        'tenure',
+        'status',
         'details'
     ];
 
