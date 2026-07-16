@@ -13,6 +13,8 @@ use App\Models\JobPosting;
 use App\Models\JobApplication;
 use App\Models\FarmerInsurance;
 use App\Models\SubsidyApplication;
+use App\Models\HealthInsurance;
+use App\Models\MotorInsurance;
 
 use Illuminate\Support\Facades\Validator;
 
@@ -202,6 +204,72 @@ class ServiceController extends Controller
                         'ifsc'             => $data['ifsc'] ?? null,
                         'status'           => 'Pending',
                         'details'          => $data,
+                    ]);
+                    break;
+
+                case 'health_insurance':
+                    $record = HealthInsurance::create([
+                        'user_id'              => $userId,
+                        'applicant_name'       => $data['applicant_name'] ?? null,
+                        'mobile'               => $data['mobile'] ?? null,
+                        'email'                => $data['email'] ?? null,
+                        'aadhaar'              => $data['aadhaar'] ?? null,
+                        'pan'                  => $data['pan'] ?? null,
+                        'dob'                  => $data['dob'] ?? null,
+                        'gender'               => $data['gender'] ?? null,
+                        'age'                  => $data['age'] ?? null,
+                        'address'              => $data['address'] ?? null,
+                        'city'                 => $data['city'] ?? null,
+                        'state'                => $data['state'] ?? null,
+                        'pincode'              => $data['pincode'] ?? null,
+                        'plan_type'            => $data['plan_type'] ?? null,
+                        'sum_insured'          => $data['sum_insured'] ?? null,
+                        'premium_amount'       => $data['premium_amount'] ?? null,
+                        'members_covered'      => $data['members_covered'] ?? null,
+                        'insurer_name'         => $data['insurer_name'] ?? null,
+                        'policy_term'          => $data['policy_term'] ?? null,
+                        'pre_existing_disease' => isset($data['pre_existing_disease']) ? (bool)$data['pre_existing_disease'] : false,
+                        'disease_details'      => $data['disease_details'] ?? null,
+                        'nominee_name'         => $data['nominee_name'] ?? null,
+                        'nominee_relation'     => $data['nominee_relation'] ?? null,
+                        'nominee_dob'          => $data['nominee_dob'] ?? null,
+                        'status'               => 'Pending',
+                        'details'              => $data,
+                    ]);
+                    break;
+
+                case 'motor_insurance':
+                    $record = MotorInsurance::create([
+                        'user_id'               => $userId,
+                        'applicant_name'        => $data['applicant_name'] ?? null,
+                        'mobile'                => $data['mobile'] ?? null,
+                        'email'                 => $data['email'] ?? null,
+                        'aadhaar'               => $data['aadhaar'] ?? null,
+                        'pan'                   => $data['pan'] ?? null,
+                        'address'               => $data['address'] ?? null,
+                        'city'                  => $data['city'] ?? null,
+                        'state'                 => $data['state'] ?? null,
+                        'pincode'               => $data['pincode'] ?? null,
+                        'vehicle_type'          => $data['vehicle_type'] ?? null,
+                        'vehicle_make'          => $data['vehicle_make'] ?? null,
+                        'vehicle_model'         => $data['vehicle_model'] ?? null,
+                        'vehicle_year'          => $data['vehicle_year'] ?? null,
+                        'registration_number'   => $data['registration_number'] ?? null,
+                        'engine_number'         => $data['engine_number'] ?? null,
+                        'chassis_number'        => $data['chassis_number'] ?? null,
+                        'vehicle_value'         => $data['vehicle_value'] ?? null,
+                        'plan_type'             => $data['plan_type'] ?? null,
+                        'insurer_name'          => $data['insurer_name'] ?? null,
+                        'premium_amount'        => $data['premium_amount'] ?? null,
+                        'policy_term'           => $data['policy_term'] ?? null,
+                        'has_previous_policy'   => isset($data['has_previous_policy']) ? (bool)$data['has_previous_policy'] : false,
+                        'previous_policy_number'=> $data['previous_policy_number'] ?? null,
+                        'previous_insurer'      => $data['previous_insurer'] ?? null,
+                        'claim_history'         => $data['claim_history'] ?? null,
+                        'nominee_name'          => $data['nominee_name'] ?? null,
+                        'nominee_relation'      => $data['nominee_relation'] ?? null,
+                        'status'                => 'Pending',
+                        'details'               => $data,
                     ]);
                     break;
 

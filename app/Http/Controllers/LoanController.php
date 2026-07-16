@@ -30,12 +30,28 @@ class LoanController extends Controller
             $business = DB::table('business_loans')
                 ->join('registrations as biz', 'business_loans.user_id', '=', 'biz.id');
 
+            $insurances = DB::table('farmer_insurance_applications')
+                ->join('registrations as ins', 'farmer_insurance_applications.user_id', '=', 'ins.id');
+
+            $healthInsurances = DB::table('health_insurance_applications')
+                ->join('registrations as hi', 'health_insurance_applications.user_id', '=', 'hi.id');
+
+            $motorInsurances = DB::table('motor_insurance_applications')
+                ->join('registrations as mi', 'motor_insurance_applications.user_id', '=', 'mi.id');
+
+            $crops = DB::table('crop_registrations')
+                ->join('registrations as farmer', 'crop_registrations.user_id', '=', 'farmer.id');
+
             // Apply city-based filter if bank employee has a city set
             if ($bankCity) {
                 $lcCity = strtolower(trim($bankCity));
                 $farmers->whereRaw('LOWER(farmer.city) = ?', [$lcCity]);
                 $students->whereRaw('LOWER(student.city) = ?', [$lcCity]);
                 $business->whereRaw('LOWER(biz.city) = ?', [$lcCity]);
+                $insurances->whereRaw('LOWER(ins.city) = ?', [$lcCity]);
+                $healthInsurances->whereRaw('LOWER(hi.city) = ?', [$lcCity]);
+                $motorInsurances->whereRaw('LOWER(mi.city) = ?', [$lcCity]);
+                $crops->whereRaw('LOWER(farmer.city) = ?', [$lcCity]);
             }
 
             $farmers = $farmers->select(
@@ -66,7 +82,11 @@ class LoanController extends Controller
                 'student_loans.status',
                 'student_loans.claimed_by',
                 'student_loans.created_at',
-                DB::raw("'Education Loan' as loan_type"),
+                DB::raw("CASE 
+                    WHEN JSON_UNQUOTE(JSON_EXTRACT(student_loans.details, '$.form_type')) = 'student_admission' THEN 'student_admission'
+                    WHEN JSON_UNQUOTE(JSON_EXTRACT(student_loans.details, '$.form_type')) = 'student_scholarship' THEN 'student_scholarship'
+                    ELSE 'Education Loan' 
+                END as loan_type"),
                 DB::raw("'student_loans' as table_name"),
                 DB::raw("JSON_OBJECT('College Name', student_loans.college_name, 'Course Name', student_loans.course_name) as extra_data"),
                 'student_loans.details'
@@ -100,8 +120,96 @@ class LoanController extends Controller
                 'business_loans.details'
             );
 
+            $insurances = $insurances->select(
+                'farmer_insurance_applications.id',
+                'ins.name',
+                'ins.mobile',
+                'ins.email',
+                'ins.city',
+                'ins.state',
+                'farmer_insurance_applications.premium_amount as amount',
+                'farmer_insurance_applications.status',
+                'farmer_insurance_applications.claimed_by',
+                'farmer_insurance_applications.created_at',
+                DB::raw("'Crop Insurance' as loan_type"),
+                DB::raw("'farmer_insurance_applications' as table_name"),
+                DB::raw("JSON_OBJECT('Crop Name', farmer_insurance_applications.crop_name, 'Sum Insured', farmer_insurance_applications.sum_insured) as extra_data"),
+                'farmer_insurance_applications.details'
+            );
+
+            $healthInsurances = $healthInsurances->select(
+                'health_insurance_applications.id',
+                'hi.name',
+                'hi.mobile',
+                'hi.email',
+                'hi.city',
+                'hi.state',
+                'health_insurance_applications.premium_amount as amount',
+                'health_insurance_applications.status',
+                'health_insurance_applications.claimed_by',
+                'health_insurance_applications.created_at',
+                DB::raw("'Health Insurance' as loan_type"),
+                DB::raw("'health_insurance_applications' as table_name"),
+                DB::raw("JSON_OBJECT('Plan Type', health_insurance_applications.plan_type, 'Sum Insured', health_insurance_applications.sum_insured, 'Members', health_insurance_applications.members_covered) as extra_data"),
+                'health_insurance_applications.details'
+            );
+
+            $motorInsurances = $motorInsurances->select(
+                'motor_insurance_applications.id',
+                'mi.name',
+                'mi.mobile',
+                'mi.email',
+                'mi.city',
+                'mi.state',
+                'motor_insurance_applications.premium_amount as amount',
+                'motor_insurance_applications.status',
+                'motor_insurance_applications.claimed_by',
+                'motor_insurance_applications.created_at',
+                DB::raw("'Motor Insurance' as loan_type"),
+                DB::raw("'motor_insurance_applications' as table_name"),
+                DB::raw("JSON_OBJECT('Vehicle Type', motor_insurance_applications.vehicle_type, 'Make/Model', CONCAT(motor_insurance_applications.vehicle_make, ' ', motor_insurance_applications.vehicle_model), 'Plan', motor_insurance_applications.plan_type) as extra_data"),
+                'motor_insurance_applications.details'
+            );
+
+            $crops = $crops->select(
+                'crop_registrations.id',
+                'farmer.name',
+                'farmer.mobile',
+                'farmer.email',
+                'farmer.city',
+                'farmer.state',
+                'crop_registrations.price as amount',
+                'crop_registrations.status',
+                'crop_registrations.claimed_by',
+                'crop_registrations.created_at',
+                DB::raw("'Crop Registration' as loan_type"),
+                DB::raw("'crop_registrations' as table_name"),
+                DB::raw("JSON_OBJECT('Crop Name', crop_registrations.crop_name) as extra_data"),
+                'crop_registrations.details'
+            );
+
+            // Apply strict type filtering for shared tables if a specific type is requested
             $type = $request->query('type');
             $table = $request->query('table');
+
+            if ($table === 'business_loans') {
+                if ($type && $type !== 'Business Loan') {
+                    $business->where('business_loans.purpose', $type);
+                } else {
+                    $business->whereNotIn('business_loans.purpose', [
+                        'GST Registration', 'Shop Act License',
+                        'Company Firm Registration', 'Marketing Support',
+                        'Jan Dhan Account', 'Online Banking', 'UPI Payments', 'Direct Benefit Transfer'
+                    ]);
+                }
+            }
+            if ($table === 'student_loans') {
+                if ($type && $type !== 'Education Loan') {
+                    $students->whereRaw("JSON_UNQUOTE(JSON_EXTRACT(student_loans.details, '$.form_type')) = ?", [$type]);
+                } else {
+                    $students->whereRaw("JSON_UNQUOTE(JSON_EXTRACT(student_loans.details, '$.form_type')) NOT IN ('student_admission', 'student_scholarship') OR JSON_EXTRACT(student_loans.details, '$.form_type') IS NULL");
+                }
+            }
 
             if ($table === 'farmer_loans' || $type === 'Farmer Loan') {
                 $leads = $farmers->orderBy('created_at', 'desc')->get();
@@ -109,10 +217,22 @@ class LoanController extends Controller
                 $leads = $students->orderBy('created_at', 'desc')->get();
             } elseif ($table === 'business_loans' || $type === 'Business Loan') {
                 $leads = $business->orderBy('created_at', 'desc')->get();
+            } elseif ($table === 'farmer_insurance_applications' || $type === 'Crop Insurance') {
+                $leads = $insurances->orderBy('created_at', 'desc')->get();
+            } elseif ($table === 'health_insurance_applications' || $type === 'Health Insurance') {
+                $leads = $healthInsurances->orderBy('created_at', 'desc')->get();
+            } elseif ($table === 'motor_insurance_applications' || $type === 'Motor Insurance') {
+                $leads = $motorInsurances->orderBy('created_at', 'desc')->get();
+            } elseif ($table === 'crop_registrations' || $type === 'Crop Registration') {
+                $leads = $crops->orderBy('created_at', 'desc')->get();
             } else {
-                // Combine All Loans
+                // Combine All Leads
                 $leads = $farmers->unionAll($students)
                     ->unionAll($business)
+                    ->unionAll($insurances)
+                    ->unionAll($healthInsurances)
+                    ->unionAll($motorInsurances)
+                    ->unionAll($crops)
                     ->orderBy('created_at', 'desc')
                     ->get();
             }
@@ -184,6 +304,26 @@ class LoanController extends Controller
                 END",
                 'extra' => "JSON_OBJECT('Purpose', business_loans.purpose, 'Tenure (Months)', business_loans.tenure)",
             ],
+            'farmer_insurance_applications' => [
+                'loan_type' => "'Crop Insurance'",
+                'extra' => "JSON_OBJECT('Crop Name', farmer_insurance_applications.crop_name, 'Sum Insured', farmer_insurance_applications.sum_insured)",
+                'amount_col' => 'farmer_insurance_applications.premium_amount',
+            ],
+            'health_insurance_applications' => [
+                'loan_type' => "'Health Insurance'",
+                'extra' => "JSON_OBJECT('Plan Type', health_insurance_applications.plan_type, 'Sum Insured', health_insurance_applications.sum_insured, 'Members', health_insurance_applications.members_covered)",
+                'amount_col' => 'health_insurance_applications.premium_amount',
+            ],
+            'motor_insurance_applications' => [
+                'loan_type' => "'Motor Insurance'",
+                'extra' => "JSON_OBJECT('Vehicle Type', motor_insurance_applications.vehicle_type, 'Registration No', motor_insurance_applications.registration_number, 'Plan', motor_insurance_applications.plan_type)",
+                'amount_col' => 'motor_insurance_applications.premium_amount',
+            ],
+            'crop_registrations' => [
+                'loan_type' => "'Crop Registration'",
+                'extra' => "JSON_OBJECT('Crop Name', crop_registrations.crop_name)",
+                'amount_col' => 'crop_registrations.price',
+            ],
         ];
 
         if (!array_key_exists($table, $allowedTables)) {
@@ -193,6 +333,7 @@ class LoanController extends Controller
         $meta = $allowedTables[$table];
         $loanType = $meta['loan_type'];
         $extraSql = $meta['extra'];
+        $amountCol = $meta['amount_col'] ?? "{$table}.amount";
 
         $leads = DB::table($table)
             ->join('registrations', "{$table}.user_id", '=', 'registrations.id')
@@ -203,7 +344,7 @@ class LoanController extends Controller
                 'registrations.email',
                 'registrations.city',
                 'registrations.state',
-                "{$table}.amount",
+                DB::raw("{$amountCol} as amount"),
                 "{$table}.status",
                 "{$table}.created_at",
                 DB::raw("{$loanType} as loan_type"),
@@ -230,7 +371,11 @@ class LoanController extends Controller
 
         $students = DB::table('student_loans')
             ->join('registrations', 'student_loans.user_id', '=', 'registrations.id')
-            ->select('student_loans.id', 'registrations.name', 'registrations.mobile', 'registrations.email', 'registrations.city', 'registrations.state', 'student_loans.amount', 'student_loans.status', 'student_loans.created_at', DB::raw("'Education Loan' as loan_type"), DB::raw("'student_loans' as table_name"), DB::raw("JSON_OBJECT('College Name', student_loans.college_name, 'Course Name', student_loans.course_name) as extra_data"), 'student_loans.details')
+            ->select('student_loans.id', 'registrations.name', 'registrations.mobile', 'registrations.email', 'registrations.city', 'registrations.state', 'student_loans.amount', 'student_loans.status', 'student_loans.created_at', DB::raw("CASE 
+                WHEN JSON_UNQUOTE(JSON_EXTRACT(student_loans.details, '$.form_type')) = 'student_admission' THEN 'student_admission'
+                WHEN JSON_UNQUOTE(JSON_EXTRACT(student_loans.details, '$.form_type')) = 'student_scholarship' THEN 'student_scholarship'
+                ELSE 'Education Loan' 
+            END as loan_type"), DB::raw("'student_loans' as table_name"), DB::raw("JSON_OBJECT('College Name', student_loans.college_name, 'Course Name', student_loans.course_name) as extra_data"), 'student_loans.details')
             ->where('student_loans.claimed_by', $bankUserId)
             ->where('student_loans.status', 'Approved');
 
@@ -251,8 +396,36 @@ class LoanController extends Controller
             ->where('business_loans.claimed_by', $bankUserId)
             ->where('business_loans.status', 'Approved');
 
+        $insurances = DB::table('farmer_insurance_applications')
+            ->join('registrations', 'farmer_insurance_applications.user_id', '=', 'registrations.id')
+            ->select('farmer_insurance_applications.id', 'registrations.name', 'registrations.mobile', 'registrations.email', 'registrations.city', 'registrations.state', 'farmer_insurance_applications.premium_amount as amount', 'farmer_insurance_applications.status', 'farmer_insurance_applications.created_at', DB::raw("'Crop Insurance' as loan_type"), DB::raw("'farmer_insurance_applications' as table_name"), DB::raw("JSON_OBJECT('Crop Name', farmer_insurance_applications.crop_name, 'Sum Insured', farmer_insurance_applications.sum_insured) as extra_data"), 'farmer_insurance_applications.details')
+            ->where('farmer_insurance_applications.claimed_by', $bankUserId)
+            ->where('farmer_insurance_applications.status', 'Approved');
+
+        $healthInsurances = DB::table('health_insurance_applications')
+            ->join('registrations', 'health_insurance_applications.user_id', '=', 'registrations.id')
+            ->select('health_insurance_applications.id', 'registrations.name', 'registrations.mobile', 'registrations.email', 'registrations.city', 'registrations.state', 'health_insurance_applications.premium_amount as amount', 'health_insurance_applications.status', 'health_insurance_applications.created_at', DB::raw("'Health Insurance' as loan_type"), DB::raw("'health_insurance_applications' as table_name"), DB::raw("JSON_OBJECT('Plan Type', health_insurance_applications.plan_type, 'Sum Insured', health_insurance_applications.sum_insured, 'Members', health_insurance_applications.members_covered) as extra_data"), 'health_insurance_applications.details')
+            ->where('health_insurance_applications.claimed_by', $bankUserId)
+            ->where('health_insurance_applications.status', 'Approved');
+
+        $motorInsurances = DB::table('motor_insurance_applications')
+            ->join('registrations', 'motor_insurance_applications.user_id', '=', 'registrations.id')
+            ->select('motor_insurance_applications.id', 'registrations.name', 'registrations.mobile', 'registrations.email', 'registrations.city', 'registrations.state', 'motor_insurance_applications.premium_amount as amount', 'motor_insurance_applications.status', 'motor_insurance_applications.created_at', DB::raw("'Motor Insurance' as loan_type"), DB::raw("'motor_insurance_applications' as table_name"), DB::raw("JSON_OBJECT('Vehicle Type', motor_insurance_applications.vehicle_type, 'Make/Model', CONCAT(motor_insurance_applications.vehicle_make, ' ', motor_insurance_applications.vehicle_model), 'Plan', motor_insurance_applications.plan_type) as extra_data"), 'motor_insurance_applications.details')
+            ->where('motor_insurance_applications.claimed_by', $bankUserId)
+            ->where('motor_insurance_applications.status', 'Approved');
+
+        $crops = DB::table('crop_registrations')
+            ->join('registrations', 'crop_registrations.user_id', '=', 'registrations.id')
+            ->select('crop_registrations.id', 'registrations.name', 'registrations.mobile', 'registrations.email', 'registrations.city', 'registrations.state', 'crop_registrations.price as amount', 'crop_registrations.status', 'crop_registrations.created_at', DB::raw("'Crop Registration' as loan_type"), DB::raw("'crop_registrations' as table_name"), DB::raw("JSON_OBJECT('Crop Name', crop_registrations.crop_name) as extra_data"), 'crop_registrations.details')
+            ->where('crop_registrations.claimed_by', $bankUserId)
+            ->where('crop_registrations.status', 'Approved');
+
         return $farmers->unionAll($students)
             ->unionAll($business)
+            ->unionAll($insurances)
+            ->unionAll($healthInsurances)
+            ->unionAll($motorInsurances)
+            ->unionAll($crops)
             ->orderBy('created_at', 'desc')
             ->get();
     }
