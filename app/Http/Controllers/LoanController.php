@@ -42,6 +42,12 @@ class LoanController extends Controller
             $crops = DB::table('crop_registrations')
                 ->join('registrations as farmer', 'crop_registrations.user_id', '=', 'farmer.id');
 
+            $travelEnquiries = DB::table('travel_enquiries')
+                ->join('registrations as te', 'travel_enquiries.user_id', '=', 'te.id');
+
+            $realEstateEnquiries = DB::table('real_estate_enquiries')
+                ->join('registrations as re', 'real_estate_enquiries.user_id', '=', 're.id');
+
             // Apply city-based filter if bank employee has a city set
             if ($bankCity) {
                 $lcCity = strtolower(trim($bankCity));
@@ -52,6 +58,8 @@ class LoanController extends Controller
                 $healthInsurances->whereRaw('LOWER(hi.city) = ?', [$lcCity]);
                 $motorInsurances->whereRaw('LOWER(mi.city) = ?', [$lcCity]);
                 $crops->whereRaw('LOWER(farmer.city) = ?', [$lcCity]);
+                $travelEnquiries->whereRaw('LOWER(te.city) = ?', [$lcCity]);
+                $realEstateEnquiries->whereRaw('LOWER(re.city) = ?', [$lcCity]);
             }
 
             $farmers = $farmers->select(
@@ -85,6 +93,8 @@ class LoanController extends Controller
                 DB::raw("CASE 
                     WHEN JSON_UNQUOTE(JSON_EXTRACT(student_loans.details, '$.form_type')) = 'student_admission' THEN 'student_admission'
                     WHEN JSON_UNQUOTE(JSON_EXTRACT(student_loans.details, '$.form_type')) = 'student_scholarship' THEN 'student_scholarship'
+                    WHEN JSON_UNQUOTE(JSON_EXTRACT(student_loans.details, '$.form_type')) = 'student_internship' THEN 'student_internship'
+                    WHEN JSON_UNQUOTE(JSON_EXTRACT(student_loans.details, '$.form_type')) = 'student_job_application' THEN 'student_job_application'
                     ELSE 'Education Loan' 
                 END as loan_type"),
                 DB::raw("'student_loans' as table_name"),
@@ -188,6 +198,40 @@ class LoanController extends Controller
                 'crop_registrations.details'
             );
 
+            $travelEnquiries = $travelEnquiries->select(
+                'travel_enquiries.id',
+                'te.name',
+                'te.mobile',
+                'te.email',
+                'te.city',
+                'te.state',
+                DB::raw("0 as amount"),
+                'travel_enquiries.status',
+                'travel_enquiries.claimed_by',
+                'travel_enquiries.created_at',
+                DB::raw("'Travel Enquiry' as loan_type"),
+                DB::raw("'travel_enquiries' as table_name"),
+                DB::raw("JSON_OBJECT('Destination', travel_enquiries.destination, 'Passengers', travel_enquiries.passengers) as extra_data"),
+                'travel_enquiries.details'
+            );
+
+            $realEstateEnquiries = $realEstateEnquiries->select(
+                'real_estate_enquiries.id',
+                're.name',
+                're.mobile',
+                're.email',
+                're.city',
+                're.state',
+                DB::raw("0 as amount"),
+                'real_estate_enquiries.status',
+                'real_estate_enquiries.claimed_by',
+                'real_estate_enquiries.created_at',
+                DB::raw("'Real Estate Enquiry' as loan_type"),
+                DB::raw("'real_estate_enquiries' as table_name"),
+                DB::raw("JSON_OBJECT('Action', real_estate_enquiries.action, 'Property', real_estate_enquiries.property_type) as extra_data"),
+                'real_estate_enquiries.details'
+            );
+
             // Apply strict type filtering for shared tables if a specific type is requested
             $type = $request->query('type');
             $table = $request->query('table');
@@ -207,7 +251,7 @@ class LoanController extends Controller
                 if ($type && $type !== 'Education Loan') {
                     $students->whereRaw("JSON_UNQUOTE(JSON_EXTRACT(student_loans.details, '$.form_type')) = ?", [$type]);
                 } else {
-                    $students->whereRaw("JSON_UNQUOTE(JSON_EXTRACT(student_loans.details, '$.form_type')) NOT IN ('student_admission', 'student_scholarship') OR JSON_EXTRACT(student_loans.details, '$.form_type') IS NULL");
+                    $students->whereRaw("JSON_UNQUOTE(JSON_EXTRACT(student_loans.details, '$.form_type')) NOT IN ('student_admission', 'student_scholarship', 'student_internship', 'student_job_application') OR JSON_EXTRACT(student_loans.details, '$.form_type') IS NULL");
                 }
             }
 
@@ -225,6 +269,10 @@ class LoanController extends Controller
                 $leads = $motorInsurances->orderBy('created_at', 'desc')->get();
             } elseif ($table === 'crop_registrations' || $type === 'Crop Registration') {
                 $leads = $crops->orderBy('created_at', 'desc')->get();
+            } elseif ($table === 'travel_enquiries' || $type === 'Travel Enquiry') {
+                $leads = $travelEnquiries->orderBy('created_at', 'desc')->get();
+            } elseif ($table === 'real_estate_enquiries' || $type === 'Real Estate Enquiry') {
+                $leads = $realEstateEnquiries->orderBy('created_at', 'desc')->get();
             } else {
                 // Combine All Leads
                 $leads = $farmers->unionAll($students)
@@ -233,6 +281,8 @@ class LoanController extends Controller
                     ->unionAll($healthInsurances)
                     ->unionAll($motorInsurances)
                     ->unionAll($crops)
+                    ->unionAll($travelEnquiries)
+                    ->unionAll($realEstateEnquiries)
                     ->orderBy('created_at', 'desc')
                     ->get();
             }
@@ -324,39 +374,65 @@ class LoanController extends Controller
                 'extra' => "JSON_OBJECT('Crop Name', crop_registrations.crop_name)",
                 'amount_col' => 'crop_registrations.price',
             ],
+            'travel_enquiries' => [
+                'loan_type' => "'Travel Enquiry'",
+                'extra' => "JSON_OBJECT('Destination', travel_enquiries.destination, 'Passengers', travel_enquiries.passengers)",
+                'amount_col' => '0',
+            ],
+            'real_estate_enquiries' => [
+                'loan_type' => "'Real Estate Enquiry'",
+                'extra' => "JSON_OBJECT('Action', real_estate_enquiries.action, 'Property', real_estate_enquiries.property_type)",
+                'amount_col' => '0',
+            ],
         ];
 
-        if (!array_key_exists($table, $allowedTables)) {
-            return response()->json(['message' => 'Invalid table'], 400);
+        $results = [];
+
+        if ($table === 'all') {
+            $tablesToQuery = array_keys($allowedTables);
+        } else {
+            if (!array_key_exists($table, $allowedTables)) {
+                return response()->json(['message' => 'Invalid table'], 400);
+            }
+            $tablesToQuery = [$table];
         }
 
-        $meta = $allowedTables[$table];
-        $loanType = $meta['loan_type'];
-        $extraSql = $meta['extra'];
-        $amountCol = $meta['amount_col'] ?? "{$table}.amount";
+        foreach ($tablesToQuery as $tbl) {
+            $meta = $allowedTables[$tbl];
+            $loanType = $meta['loan_type'];
+            $extraSql = $meta['extra'];
+            $amountCol = $meta['amount_col'] ?? "{$tbl}.amount";
 
-        $leads = DB::table($table)
-            ->join('registrations', "{$table}.user_id", '=', 'registrations.id')
-            ->select(
-                "{$table}.id",
-                'registrations.name',
-                'registrations.mobile',
-                'registrations.email',
-                'registrations.city',
-                'registrations.state',
-                DB::raw("{$amountCol} as amount"),
-                "{$table}.status",
-                "{$table}.created_at",
-                DB::raw("{$loanType} as loan_type"),
-                DB::raw("'{$table}' as table_name"),
-                DB::raw("{$extraSql} as extra_data"),
-                "{$table}.details"
-            )
-            ->where("{$table}.user_id", $userId)
-            ->orderBy("{$table}.created_at", 'desc')
-            ->get();
+            $leads = DB::table($tbl)
+                ->join('registrations', "{$tbl}.user_id", '=', 'registrations.id')
+                ->select(
+                    "{$tbl}.id",
+                    'registrations.name',
+                    'registrations.mobile',
+                    'registrations.email',
+                    'registrations.city',
+                    'registrations.state',
+                    DB::raw("{$amountCol} as amount"),
+                    "{$tbl}.status",
+                    "{$tbl}.created_at",
+                    DB::raw("{$loanType} as loan_type"),
+                    DB::raw("'{$tbl}' as table_name"),
+                    DB::raw("{$extraSql} as extra_data"),
+                    "{$tbl}.details"
+                )
+                ->where("{$tbl}.user_id", $userId)
+                ->get()
+                ->toArray();
+            
+            $results = array_merge($results, $leads);
+        }
 
-        return response()->json($leads, 200);
+        // Sort by created_at descending
+        usort($results, function ($a, $b) {
+            return strtotime($b->created_at) - strtotime($a->created_at);
+        });
+
+        return response()->json($results, 200);
     }
 
     public function getMyAcceptedLeads(Request $request)
@@ -374,6 +450,8 @@ class LoanController extends Controller
             ->select('student_loans.id', 'registrations.name', 'registrations.mobile', 'registrations.email', 'registrations.city', 'registrations.state', 'student_loans.amount', 'student_loans.status', 'student_loans.created_at', DB::raw("CASE 
                 WHEN JSON_UNQUOTE(JSON_EXTRACT(student_loans.details, '$.form_type')) = 'student_admission' THEN 'student_admission'
                 WHEN JSON_UNQUOTE(JSON_EXTRACT(student_loans.details, '$.form_type')) = 'student_scholarship' THEN 'student_scholarship'
+                WHEN JSON_UNQUOTE(JSON_EXTRACT(student_loans.details, '$.form_type')) = 'student_internship' THEN 'student_internship'
+                WHEN JSON_UNQUOTE(JSON_EXTRACT(student_loans.details, '$.form_type')) = 'student_job_application' THEN 'student_job_application'
                 ELSE 'Education Loan' 
             END as loan_type"), DB::raw("'student_loans' as table_name"), DB::raw("JSON_OBJECT('College Name', student_loans.college_name, 'Course Name', student_loans.course_name) as extra_data"), 'student_loans.details')
             ->where('student_loans.claimed_by', $bankUserId)

@@ -15,6 +15,8 @@ use App\Models\FarmerInsurance;
 use App\Models\SubsidyApplication;
 use App\Models\HealthInsurance;
 use App\Models\MotorInsurance;
+use App\Models\TravelEnquiry;
+use App\Models\RealEstateEnquiry;
 
 use Illuminate\Support\Facades\Validator;
 
@@ -333,6 +335,29 @@ class ServiceController extends Controller
                         'course_name' => $data['course'] ?? '',
                         'amount' => 0,
                         'details' => array_merge($data, ['form_type' => $type]),
+                    ]);
+                    break;
+
+                case 'travel_enquiry':
+                    $record = TravelEnquiry::create([
+                        'user_id' => $userId,
+                        'destination' => $data['destination'] ?? '',
+                        'travel_date' => $data['travel_date'] ?? null,
+                        'passengers' => $data['passengers'] ?? 1,
+                        'details' => $data,
+                        'status' => 'Pending'
+                    ]);
+                    break;
+
+                case 'real_estate_enquiry':
+                    $record = RealEstateEnquiry::create([
+                        'user_id' => $userId,
+                        'action' => $data['action'] ?? '',
+                        'property_type' => $data['property_type'] ?? '',
+                        'location' => $data['location'] ?? '',
+                        'budget' => $data['budget'] ?? null,
+                        'details' => $data,
+                        'status' => 'Pending'
                     ]);
                     break;
 
