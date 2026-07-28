@@ -48,6 +48,9 @@ class LoanController extends Controller
             $realEstateEnquiries = DB::table('real_estate_enquiries')
                 ->join('registrations as re', 'real_estate_enquiries.user_id', '=', 're.id');
 
+            $subsidies = DB::table('subsidy_applications')
+                ->join('registrations as sub', 'subsidy_applications.user_id', '=', 'sub.id');
+
             // Apply city-based filter if bank employee has a city set
             if ($bankCity) {
                 $lcCity = strtolower(trim($bankCity));
@@ -60,6 +63,7 @@ class LoanController extends Controller
                 $crops->whereRaw('LOWER(farmer.city) = ?', [$lcCity]);
                 $travelEnquiries->whereRaw('LOWER(te.city) = ?', [$lcCity]);
                 $realEstateEnquiries->whereRaw('LOWER(re.city) = ?', [$lcCity]);
+                $subsidies->whereRaw('LOWER(sub.city) = ?', [$lcCity]);
             }
 
             $farmers = $farmers->select(
@@ -232,6 +236,23 @@ class LoanController extends Controller
                 'real_estate_enquiries.details'
             );
 
+            $subsidies = $subsidies->select(
+                'subsidy_applications.id',
+                'sub.name',
+                'sub.mobile',
+                'sub.email',
+                'sub.city',
+                'sub.state',
+                DB::raw("0 as amount"),
+                'subsidy_applications.status',
+                'subsidy_applications.claimed_by',
+                'subsidy_applications.created_at',
+                DB::raw("'Subsidy Application' as loan_type"),
+                DB::raw("'subsidy_applications' as table_name"),
+                DB::raw("JSON_OBJECT('Subsidy Type', subsidy_applications.subsidy_type, 'Scheme Name', subsidy_applications.scheme_name) as extra_data"),
+                'subsidy_applications.details'
+            );
+
             // Apply strict type filtering for shared tables if a specific type is requested
             $type = $request->query('type');
             $table = $request->query('table');
@@ -273,6 +294,8 @@ class LoanController extends Controller
                 $leads = $travelEnquiries->orderBy('created_at', 'desc')->get();
             } elseif ($table === 'real_estate_enquiries' || $type === 'Real Estate Enquiry') {
                 $leads = $realEstateEnquiries->orderBy('created_at', 'desc')->get();
+            } elseif ($table === 'subsidy_applications' || $type === 'Subsidy Application') {
+                $leads = $subsidies->orderBy('created_at', 'desc')->get();
             } else {
                 // Combine All Leads
                 $leads = $farmers->unionAll($students)
@@ -283,6 +306,7 @@ class LoanController extends Controller
                     ->unionAll($crops)
                     ->unionAll($travelEnquiries)
                     ->unionAll($realEstateEnquiries)
+                    ->unionAll($subsidies)
                     ->orderBy('created_at', 'desc')
                     ->get();
             }
@@ -384,6 +408,22 @@ class LoanController extends Controller
                 'extra' => "JSON_OBJECT('Action', real_estate_enquiries.action, 'Property', real_estate_enquiries.property_type)",
                 'amount_col' => '0',
             ],
+            'job_postings' => [
+                'loan_type' => "CASE WHEN JSON_UNQUOTE(JSON_EXTRACT(job_postings.details, '$.job_type')) = 'Internship' THEN 'Internship Posting' ELSE 'Job Posting' END",
+                'extra' => "JSON_OBJECT('Job Title', job_postings.job_title, 'Salary Range', job_postings.salary_range)",
+                'amount_col' => '0',
+                'status_col' => "'Active'",
+            ],
+            'subsidy_applications' => [
+                'loan_type' => "'Subsidy Application'",
+                'extra' => "JSON_OBJECT('Subsidy Type', subsidy_applications.subsidy_type, 'Scheme Name', subsidy_applications.scheme_name)",
+                'amount_col' => '0',
+            ],
+            'job_applications' => [
+                'loan_type' => "'Job Application'",
+                'extra' => "JSON_OBJECT('Job ID', job_applications.job_id, 'Status', job_applications.status)",
+                'amount_col' => '0',
+            ],
         ];
 
         $results = [];
@@ -402,6 +442,7 @@ class LoanController extends Controller
             $loanType = $meta['loan_type'];
             $extraSql = $meta['extra'];
             $amountCol = $meta['amount_col'] ?? "{$tbl}.amount";
+            $statusCol = $meta['status_col'] ?? "{$tbl}.status";
 
             $leads = DB::table($tbl)
                 ->join('registrations', "{$tbl}.user_id", '=', 'registrations.id')
@@ -413,7 +454,7 @@ class LoanController extends Controller
                     'registrations.city',
                     'registrations.state',
                     DB::raw("{$amountCol} as amount"),
-                    "{$tbl}.status",
+                    DB::raw("{$statusCol} as status"),
                     "{$tbl}.created_at",
                     DB::raw("{$loanType} as loan_type"),
                     DB::raw("'{$tbl}' as table_name"),
