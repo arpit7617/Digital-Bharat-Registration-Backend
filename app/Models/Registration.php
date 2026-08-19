@@ -15,6 +15,10 @@ class Registration extends Model
         'category',
         'custom_id',
 
+        // Google OAuth
+        'google_id',
+        'avatar',
+
         // Address Fields
         'pincode',
         'district',
@@ -55,17 +59,29 @@ class Registration extends Model
         'preferred_job_role',
 
         // Partner / Wallet Fields
+        'registration_source',
         'registration_type',
         'is_partner',
         'registration_fee',
         'partner_code',
         'referred_partner_code',
         'wallet_balance',
+        'terms_accepted',
+        'terms_accepted_at',
+        'payment_acknowledged',
+        'payment_status',
+        'payment_id',
+        'transaction_id',
     ];
 
     protected static function booted()
     {
         static::creating(function ($registration) {
+            // Auto-set terms_accepted_at timestamp if accepted
+            if (!empty($registration->terms_accepted) && empty($registration->terms_accepted_at)) {
+                $registration->terms_accepted_at = now();
+            }
+
             // Normalize inputs
             if ($registration->registration_type === 'partner' || $registration->is_partner) {
                 $registration->is_partner = true;
@@ -91,7 +107,25 @@ class Registration extends Model
                     $registration->referred_partner_code = 'PRT-' . ltrim($registration->referred_partner_code, 'PRT-');
                 }
             }
+
+            // Auto-generate custom_id if missing
+            if (empty($registration->custom_id)) {
+                $registration->custom_id = static::generateCustomId((bool) $registration->is_partner);
+            }
         });
+    }
+
+    public static function generateCustomId(bool $isPartner = false): string
+    {
+        $prefix = $isPartner ? 'PTR' : 'STU';
+        $dateStr = date('dmy');
+
+        do {
+            $randomDigits = str_pad(mt_rand(1000, 9999), 4, '0', STR_PAD_LEFT);
+            $customId = "{$prefix}-{$dateStr}-{$randomDigits}";
+        } while (static::where('custom_id', $customId)->exists());
+
+        return $customId;
     }
 
     public static function generatePartnerCode($seed)

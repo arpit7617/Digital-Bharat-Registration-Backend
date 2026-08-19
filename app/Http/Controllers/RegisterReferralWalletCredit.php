@@ -11,7 +11,7 @@ trait RegisterReferralWalletCredit
 {
     protected function creditPartnerReferralWallet(Request $request, ?Registration $newUser = null): ?float
     {
-        $code = strtoupper(trim((string) $request->input('referred_partner_code', $request->input('referral_code', ''))));
+        $code = strtoupper(trim((string) $request->input('referred_partner_code', $request->input('referral_code', $newUser?->referred_partner_code ?? ''))));
         if ($code === '' || ! str_starts_with($code, 'PRT-')) {
             return null;
         }
@@ -24,16 +24,29 @@ trait RegisterReferralWalletCredit
             return null;
         }
 
-        $amount = (float) $request->input('referral_cashback_amount', 59.90);
+        $amount = (float) $request->input('referral_cashback_amount', 419.30);
         if ($amount <= 0) {
-            $amount = round(599 * 0.10, 2);
+            $amount = round(599 * 0.70, 2);
         }
 
-        DB::transaction(function () use ($partner, $amount, $code, $newUser) {
+        return DB::transaction(function () use ($partner, $amount, $code, $newUser) {
+            // Prevent duplicate wallet credits for the same referee user.
+            if (
+                $newUser &&
+                Schema::hasTable('partner_wallet_transactions') &&
+                DB::table('partner_wallet_transactions')
+                    ->where('partner_user_id', $partner->id)
+                    ->where('referee_user_id', $newUser->id)
+                    ->where('source', 'registration_referral')
+                    ->exists()
+            ) {
+                return null;
+            }
+
             $partner->wallet_balance = (float) ($partner->wallet_balance ?? 0) + $amount;
             $partner->save();
 
-            // Optional but recommended: keep a transaction ledger.
+            // Record transaction ledger
             if (Schema::hasTable('partner_wallet_transactions')) {
                 DB::table('partner_wallet_transactions')->insert([
                     'partner_user_id' => $partner->id,
@@ -45,8 +58,8 @@ trait RegisterReferralWalletCredit
                     'updated_at' => now(),
                 ]);
             }
-        });
 
-        return $amount;
+            return $amount;
+        });
     }
 }

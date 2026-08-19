@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 class LoanController extends Controller
 {
@@ -53,17 +54,16 @@ class LoanController extends Controller
 
             // Apply city-based filter if bank employee has a city set
             if ($bankCity) {
-                $lcCity = strtolower(trim($bankCity));
-                $farmers->whereRaw('LOWER(farmer.city) = ?', [$lcCity]);
-                $students->whereRaw('LOWER(student.city) = ?', [$lcCity]);
-                $business->whereRaw('LOWER(biz.city) = ?', [$lcCity]);
-                $insurances->whereRaw('LOWER(ins.city) = ?', [$lcCity]);
-                $healthInsurances->whereRaw('LOWER(hi.city) = ?', [$lcCity]);
-                $motorInsurances->whereRaw('LOWER(mi.city) = ?', [$lcCity]);
-                $crops->whereRaw('LOWER(farmer.city) = ?', [$lcCity]);
-                $travelEnquiries->whereRaw('LOWER(te.city) = ?', [$lcCity]);
-                $realEstateEnquiries->whereRaw('LOWER(re.city) = ?', [$lcCity]);
-                $subsidies->whereRaw('LOWER(sub.city) = ?', [$lcCity]);
+                $farmers->where('farmer.city', '=', $bankCity);
+                $students->where('student.city', '=', $bankCity);
+                $business->where('biz.city', '=', $bankCity);
+                $insurances->where('ins.city', '=', $bankCity);
+                $healthInsurances->where('hi.city', '=', $bankCity);
+                $motorInsurances->where('mi.city', '=', $bankCity);
+                $crops->where('farmer.city', '=', $bankCity);
+                $travelEnquiries->where('te.city', '=', $bankCity);
+                $realEstateEnquiries->where('re.city', '=', $bankCity);
+                $subsidies->where('sub.city', '=', $bankCity);
             }
 
             $farmers = $farmers->select(
@@ -438,6 +438,9 @@ class LoanController extends Controller
         }
 
         foreach ($tablesToQuery as $tbl) {
+            if (!Schema::hasTable($tbl)) {
+                continue;
+            }
             $meta = $allowedTables[$tbl];
             $loanType = $meta['loan_type'];
             $extraSql = $meta['extra'];
@@ -584,13 +587,12 @@ class LoanController extends Controller
             ->join('registrations as farmer', 'crop_registrations.user_id', '=', 'farmer.id');
 
         if ($bankCity) {
-            $lcCity = strtolower(trim($bankCity));
-            $farmerQuery->whereRaw('LOWER(farmer.city) = ?', [$lcCity]);
-            $studentQuery->whereRaw('LOWER(student.city) = ?', [$lcCity]);
-            $businessQuery->whereRaw('LOWER(biz.city) = ?', [$lcCity]);
-            $jobPostQuery->whereRaw('LOWER(company.city) = ?', [$lcCity]);
-            $jobAppQuery->whereRaw('LOWER(applicant.city) = ?', [$lcCity]);
-            $cropQuery->whereRaw('LOWER(farmer.city) = ?', [$lcCity]);
+            $farmerQuery->where('farmer.city', '=', $bankCity);
+            $studentQuery->where('student.city', '=', $bankCity);
+            $businessQuery->where('biz.city', '=', $bankCity);
+            $jobPostQuery->where('company.city', '=', $bankCity);
+            $jobAppQuery->where('applicant.city', '=', $bankCity);
+            $cropQuery->where('farmer.city', '=', $bankCity);
         }
 
         $farmerCount = $farmerQuery->count();

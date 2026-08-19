@@ -9,12 +9,30 @@ use App\Http\Controllers\ValidatePartnerCodeController;
 use App\Http\Controllers\PartnerWalletController;
 use App\Http\Controllers\SupportMessageController;
 
+use App\Http\Controllers\CashfreeWebhookController;
+use App\Http\Controllers\PasswordResetController;
+use App\Http\Controllers\GoogleAuthController;
+
+// Google OAuth Authentication
+Route::post('/auth/google', [GoogleAuthController::class, 'googleAuth']);
+
 Route::get('/user', function (Request $request) {
     return $request->user();
 })->middleware('auth:sanctum');
 
-// This is the "extension" your Flutter app is calling!
+// Automated Cashfree Payment Gateway Webhook Endpoint
+Route::post('/cashfree-webhook', [CashfreeWebhookController::class, 'handleWebhook']);
+Route::post('/webhooks/cashfree', [CashfreeWebhookController::class, 'handleWebhook']);
+
+// Password Reset Endpoints (with rate limiting protection)
+Route::post('/forgot-password', [PasswordResetController::class, 'sendResetOtp'])->middleware('throttle:5,1');
+Route::post('/verify-reset-otp', [PasswordResetController::class, 'verifyResetOtp'])->middleware('throttle:10,1');
+Route::post('/reset-password', [PasswordResetController::class, 'resetPassword'])->middleware('throttle:5,1');
+Route::post('/change-password', [PasswordResetController::class, 'changePassword'])->middleware('throttle:5,1');
+
+// Registration & Payment Endpoints
 Route::post('/register', [RegistrationController::class, 'register']);
+Route::post('/confirm-payment', [RegistrationController::class, 'confirmPayment']);
 Route::put('/profile/{id}', [RegistrationController::class, 'updateProfile']);
 Route::post('/login', [RegistrationController::class, 'login']);
 
@@ -41,6 +59,14 @@ Route::get('/business/applicants', [LoanController::class, 'getBusinessApplicant
 Route::get('/my-job-applications', [LoanController::class, 'getMyJobApplications']);
 Route::get('/market/crops', [LoanController::class, 'getMarketCrops']);
 Route::get('/registrations', [RegistrationController::class, 'getAllRegistrations']);
+Route::get('/users', [RegistrationController::class, 'getAllRegistrations']);
+Route::get('/registered-users', [RegistrationController::class, 'getAllRegistrations']);
+Route::get('/all-users', [RegistrationController::class, 'getAllRegistrations']);
+Route::get('/get-users', [RegistrationController::class, 'getAllRegistrations']);
+
+Route::get('/users/{id}', [RegistrationController::class, 'showUser']);
+Route::get('/user/{id}', [RegistrationController::class, 'showUser']);
+Route::get('/registrations/{id}', [RegistrationController::class, 'showUser']);
 Route::get('/farmer-insurance/applications', [LoanController::class, 'getFarmerInsuranceApplications']);
 Route::get('/subsidy/applications', [LoanController::class, 'getSubsidyApplications']);
 

@@ -25,12 +25,21 @@ class PartnerWalletController extends Controller
                 ->sum('amount');
         }
 
+        $referralCount = 0;
+        if (!empty($user->partner_code)) {
+            $referralCount = Registration::query()
+                ->where('referred_partner_code', $user->partner_code)
+                ->where(function ($q) {
+                    $q->where('payment_status', 'completed')
+                      ->orWhere('payment_acknowledged', true);
+                })
+                ->count();
+        }
+
         return response()->json([
             'wallet_balance' => (float) ($user->wallet_balance ?? 0),
             'partner_code' => $user->partner_code,
-            'referral_count' => Registration::query()
-                ->where('referred_partner_code', $user->partner_code)
-                ->count(),
+            'referral_count' => $referralCount,
             'total_cashback_earned' => $totalCashback,
         ]);
     }
@@ -38,7 +47,7 @@ class PartnerWalletController extends Controller
     public function credit(Request $request): JsonResponse
     {
         $code = strtoupper(trim((string) $request->input('partner_code', '')));
-        $amount = (float) $request->input('amount', $request->input('cashback_amount', 59.90));
+        $amount = (float) $request->input('amount', $request->input('cashback_amount', 419.30));
         $refereeUserId = $request->input('referee_user_id');
 
         $partner = Registration::query()->where('partner_code', $code)->first();
